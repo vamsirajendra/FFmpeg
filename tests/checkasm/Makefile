@@ -1,4 +1,5 @@
 # libavcodec tests
+AVCODECOBJS-$(CONFIG_ALAC_DECODER) += alacdsp.o
 AVCODECOBJS-$(CONFIG_BSWAPDSP) += bswapdsp.o
 AVCODECOBJS-$(CONFIG_FLACDSP)  += flacdsp.o
 AVCODECOBJS-$(CONFIG_H264PRED) += h264pred.o
@@ -30,7 +31,7 @@ $(CHECKASM): $(EXEOBJS) $(CHECKASMOBJS) $(FF_STATIC_DEP_LIBS)
 
 checkasm: $(CHECKASM)
 
-clean:: checkasmclean
+testclean:: checkasmclean
 
 checkasmclean:
 	$(RM) $(CHECKASM) $(CLEANSUFFIXES:%=tests/checkasm/%) $(CLEANSUFFIXES:%=tests/checkasm/$(ARCH)/%)

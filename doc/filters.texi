@@ -3493,6 +3493,7 @@ of @var{all_mode}. Default value is @code{normal}.
 Available values for component modes are:
 @table @samp
 @item addition
+@item addition128
 @item and
 @item average
 @item burn
@@ -4589,7 +4590,9 @@ specified.
 
 @item band, t
 Specify the thickness of the fuzzy edge of the rectangle (added to
-@var{w} and @var{h}). The default value is 4.
+@var{w} and @var{h}). The default value is 1. This option is
+deprecated, setting higher values should no longer be necessary and
+is not recommended.
 
 @item show
 When set to 1, a green rectangle is drawn on the screen to simplify
@@ -4748,6 +4751,58 @@ Flags to local 3x3 coordinates maps like this:
     4   5
     6 7 8
 @end table
+
+@section displace
+
+Displace pixels as indicated by second and third input stream.
+
+It takes three input streams and outputs one stream, the first input is the
+source, and second and third input are displacement maps.
+
+The second input specifies how much to displace pixels along the
+x-axis, while the third input specifies how much to displace pixels
+along the y-axis.
+If one of displacement map streams terminates, last frame from that
+displacement map will be used.
+
+Note that once generated, displacements maps can be reused over and over again.
+
+A description of the accepted options follows.
+
+@table @option
+@item edge
+Set displace behavior for pixels that are out of range.
+
+Available values are:
+@table @samp
+@item blank
+Missing pixels are replaced by black pixels.
+
+@item smear
+Adjacent pixels will spread out to replace missing pixels.
+
+@item wrap
+Out of range pixels are wrapped so they point to pixels of other side.
+@end table
+Default is @samp{smear}.
+
+@end table
+
+@subsection Examples
+
+@itemize
+@item
+Add ripple effect to rgb input of video size hd720:
+@example
+ffmpeg -i INPUT -f lavfi -i nullsrc=s=hd720,lutrgb=128:128:128 -f lavfi -i nullsrc=s=hd720,geq='r=128+30*sin(2*PI*X/400+T):g=128+30*sin(2*PI*X/400+T):b=128+30*sin(2*PI*X/400+T)' -lavfi '[0][1][2]displace' OUTPUT
+@end example
+
+@item
+Add wave effect to rgb input of video size hd720:
+@example
+ffmpeg -i INPUT -f lavfi -i nullsrc=hd720,geq='r=128+80*(sin(sqrt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2))/220*2*PI+T)):g=128+80*(sin(sqrt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2))/220*2*PI+T)):b=128+80*(sin(sqrt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2))/220*2*PI+T))' -lavfi '[1]split[x][y],[0][x][y]displace' OUTPUT
+@end example
+@end itemize
 
 @section drawbox
 
@@ -7624,6 +7679,69 @@ lutyuv=y='bitand(val, 128+64+32)'
 @end example
 @end itemize
 
+@section maskedmerge
+
+Merge the first input stream with the second input stream using per pixel
+weights in the third input stream.
+
+A value of 0 in the third stream pixel component means that pixel component
+from first stream is returned unchanged, while maximum value (eg. 255 for
+8-bit videos) means that pixel component from second stream is returned
+unchanged. Intermediate values define the amount of merging between both
+input stream's pixel components.
+
+This filter accepts the following options:
+@table @option
+@item planes
+Set which planes will be processed as bitmap, unprocessed planes will be
+copied from first stream.
+By default value 0xf, all planes will be processed.
+@end table
+
+@section mcdeint
+
+Apply motion-compensation deinterlacing.
+
+It needs one field per frame as input and must thus be used together
+with yadif=1/3 or equivalent.
+
+This filter accepts the following options:
+@table @option
+@item mode
+Set the deinterlacing mode.
+
+It accepts one of the following values:
+@table @samp
+@item fast
+@item medium
+@item slow
+use iterative motion estimation
+@item extra_slow
+like @samp{slow}, but use multiple reference frames.
+@end table
+Default value is @samp{fast}.
+
+@item parity
+Set the picture field parity assumed for the input video. It must be
+one of the following values:
+
+@table @samp
+@item 0, tff
+assume top field first
+@item 1, bff
+assume bottom field first
+@end table
+
+Default value is @samp{bff}.
+
+@item qp
+Set per-block quantization parameter (QP) used by the internal
+encoder.
+
+Higher values should result in a smoother motion vector field but less
+optimal individual vectors. Default value is 1.
+@end table
+
 @section mergeplanes
 
 Merge color channel components from several video streams.
@@ -7682,50 +7800,6 @@ Cast a rgb24 clip to yuv444p:
 format=rgb24,mergeplanes=0x000102:yuv444p
 @end example
 @end itemize
-
-@section mcdeint
-
-Apply motion-compensation deinterlacing.
-
-It needs one field per frame as input and must thus be used together
-with yadif=1/3 or equivalent.
-
-This filter accepts the following options:
-@table @option
-@item mode
-Set the deinterlacing mode.
-
-It accepts one of the following values:
-@table @samp
-@item fast
-@item medium
-@item slow
-use iterative motion estimation
-@item extra_slow
-like @samp{slow}, but use multiple reference frames.
-@end table
-Default value is @samp{fast}.
-
-@item parity
-Set the picture field parity assumed for the input video. It must be
-one of the following values:
-
-@table @samp
-@item 0, tff
-assume top field first
-@item 1, bff
-assume bottom field first
-@end table
-
-Default value is @samp{bff}.
-
-@item qp
-Set per-block quantization parameter (QP) used by the internal
-encoder.
-
-Higher values should result in a smoother motion vector field but less
-optimal individual vectors. Default value is 1.
-@end table
 
 @section mpdecimate
 
@@ -10754,6 +10828,29 @@ Output:
  11111   11111   22222   22222   33333   33333   44444
 @end example
 
+@item mergex2, 7
+Move odd frames into the upper field, even into the lower field,
+generating a double height frame at same frame rate.
+@example
+ ------> time
+Input:
+Frame 1         Frame 2         Frame 3         Frame 4
+
+11111           22222           33333           44444
+11111           22222           33333           44444
+11111           22222           33333           44444
+11111           22222           33333           44444
+
+Output:
+11111           33333           33333           55555
+22222           22222           44444           44444
+11111           33333           33333           55555
+22222           22222           44444           44444
+11111           33333           33333           55555
+22222           22222           44444           44444
+11111           33333           33333           55555
+22222           22222           44444           44444
+@end example
 
 @end table
 
@@ -12642,6 +12739,15 @@ stream for better peak accuracy. It logs a message for true-peak.
 This mode requires a build with @code{libswresample}.
 @end table
 
+@item dualmono
+Treat mono input files as "dual mono". If a mono file is intended for playback
+on a stereo system, its EBU R128 measurement will be perceptually incorrect.
+If set to @code{true}, this option will compensate for this effect.
+Multi-channel input files are not effected by this option.
+
+@item panlaw
+Set a specific pan law to be used for the measurement of dual mono files.
+This parameter is optional, and has a default value of -3.01dB.
 @end table
 
 @subsection Examples

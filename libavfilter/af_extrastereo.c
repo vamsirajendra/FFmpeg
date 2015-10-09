@@ -64,14 +64,14 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
     ExtraStereoContext *s = ctx->priv;
     const float *src = (const float *)in->data[0];
     const float mult = s->mult;
-    AVFrame *out = NULL;
+    AVFrame *out;
     float *dst;
     int n;
 
     if (av_frame_is_writable(in)) {
         out = in;
     } else {
-        AVFrame *out = ff_get_audio_buffer(inlink, in->nb_samples);
+        out = ff_get_audio_buffer(inlink, in->nb_samples);
         if (!out) {
             av_frame_free(&in);
             return AVERROR(ENOMEM);

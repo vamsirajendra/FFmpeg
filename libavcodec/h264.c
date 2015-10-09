@@ -701,6 +701,7 @@ av_cold int ff_h264_decode_init(AVCodecContext *avctx)
     return 0;
 }
 
+#if HAVE_THREADS
 static int decode_init_thread_copy(AVCodecContext *avctx)
 {
     H264Context *h = avctx->priv_data;
@@ -719,6 +720,7 @@ static int decode_init_thread_copy(AVCodecContext *avctx)
 
     return 0;
 }
+#endif
 
 /**
  * Run setup operations that must be run after slice header decoding.
@@ -803,7 +805,7 @@ static void decode_postinit(H264Context *h, int setup_finished)
         /* Derive top_field_first from field pocs. */
         cur->f->top_field_first = cur->field_poc[0] < cur->field_poc[1];
     } else {
-        if (cur->f->interlaced_frame || h->sps.pic_struct_present_flag) {
+        if (h->sps.pic_struct_present_flag) {
             /* Use picture timing SEI information. Even if it is a
              * information of a past frame, better than nothing. */
             if (h->sei_pic_struct == SEI_PIC_STRUCT_TOP_BOTTOM ||
@@ -811,6 +813,10 @@ static void decode_postinit(H264Context *h, int setup_finished)
                 cur->f->top_field_first = 1;
             else
                 cur->f->top_field_first = 0;
+        } else if (cur->f->interlaced_frame) {
+            /* Default to top field first when pic_struct_present_flag
+             * is not set but interlaced frame detected */
+            cur->f->top_field_first = 1;
         } else {
             /* Most likely progressive */
             cur->f->top_field_first = 0;

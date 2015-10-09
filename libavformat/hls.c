@@ -183,6 +183,7 @@ typedef struct HLSContext {
     char *cookies;                       ///< holds HTTP cookie values set in either the initial response or as an AVOption to the HTTP protocol context
     char *headers;                       ///< holds HTTP headers set as an AVOption to the HTTP protocol context
     AVDictionary *avio_opts;
+    int strict_std_compliance;
 } HLSContext;
 
 static int read_chomp_line(AVIOContext *s, char *buf, int maxlen)
@@ -392,8 +393,9 @@ static struct rendition *new_rendition(HLSContext *c, struct rendition_info *inf
         return NULL;
 
     /* TODO: handle subtitles (each segment has to parsed separately) */
-    if (type == AVMEDIA_TYPE_SUBTITLE)
-        return NULL;
+    if (c->strict_std_compliance > FF_COMPLIANCE_EXPERIMENTAL)
+        if (type == AVMEDIA_TYPE_SUBTITLE)
+            return NULL;
 
     rend = av_mallocz(sizeof(struct rendition));
     if (!rend)
@@ -495,19 +497,6 @@ static int ensure_playlist(HLSContext *c, struct playlist **pls, const char *url
     return 0;
 }
 
-static int open_in(HLSContext *c, AVIOContext **in, const char *url)
-{
-    AVDictionary *tmp = NULL;
-    int ret;
-
-    av_dict_copy(&tmp, c->avio_opts, 0);
-
-    ret = avio_open2(in, url, AVIO_FLAG_READ, c->interrupt_callback, &tmp);
-
-    av_dict_free(&tmp);
-    return ret;
-}
-
 static int url_connect(struct playlist *pls, AVDictionary *opts, AVDictionary *opts2)
 {
     AVDictionary *tmp = NULL;
@@ -525,6 +514,14 @@ static int url_connect(struct playlist *pls, AVDictionary *opts, AVDictionary *o
     return ret;
 }
 
+static void update_options(char **dest, const char *name, void *src)
+{
+    av_freep(dest);
+    av_opt_get(src, name, 0, (uint8_t**)dest);
+    if (*dest && !strlen(*dest))
+        av_freep(dest);
+}
+
 static int open_url(HLSContext *c, URLContext **uc, const char *url, AVDictionary *opts)
 {
     AVDictionary *tmp = NULL;
@@ -534,6 +531,12 @@ static int open_url(HLSContext *c, URLContext **uc, const char *url, AVDictionar
     av_dict_copy(&tmp, opts, 0);
 
     ret = ffurl_open(uc, url, AVIO_FLAG_READ, c->interrupt_callback, &tmp);
+    if( ret >= 0) {
+        // update cookies on http response with setcookies.
+        URLContext *u = *uc;
+        update_options(&c->cookies, "cookies", u->priv_data);
+        av_dict_set(&opts, "cookies", c->cookies, 0);
+    }
 
     av_dict_free(&tmp);
 
@@ -958,18 +961,9 @@ static void intercept_id3(struct playlist *pls, uint8_t *buf,
         pls->is_id3_timestamped = (pls->id3_mpegts_timestamp != AV_NOPTS_VALUE);
 }
 
-static void update_options(char **dest, const char *name, void *src)
-{
-    av_freep(dest);
-    av_opt_get(src, name, 0, (uint8_t**)dest);
-    if (*dest && !strlen(*dest))
-        av_freep(dest);
-}
-
 static int open_input(HLSContext *c, struct playlist *pls)
 {
     AVDictionary *opts = NULL;
-    AVDictionary *opts2 = NULL;
     int ret;
     struct segment *seg = pls->segments[pls->cur_seq_no - pls->start_seq_no];
 
@@ -978,9 +972,6 @@ static int open_input(HLSContext *c, struct playlist *pls)
     av_dict_set(&opts, "cookies", c->cookies, 0);
     av_dict_set(&opts, "headers", c->headers, 0);
     av_dict_set(&opts, "seekable", "0", 0);
-
-    // Same opts for key request (ffurl_open mutilates the opts so it cannot be used twice)
-    av_dict_copy(&opts2, opts, 0);
 
     if (seg->size >= 0) {
         /* try to restrict the HTTP request to the part we want
@@ -999,14 +990,12 @@ static int open_input(HLSContext *c, struct playlist *pls)
         char iv[33], key[33], url[MAX_URL_SIZE];
         if (strcmp(seg->key, pls->key_url)) {
             URLContext *uc;
-            if (open_url(pls->parent->priv_data, &uc, seg->key, opts2) == 0) {
+            if (open_url(pls->parent->priv_data, &uc, seg->key, opts) == 0) {
                 if (ffurl_read_complete(uc, pls->key, sizeof(pls->key))
                     != sizeof(pls->key)) {
                     av_log(NULL, AV_LOG_ERROR, "Unable to read key file %s\n",
                            seg->key);
                 }
-                update_options(&c->cookies, "cookies", uc->priv_data);
-                av_dict_set(&opts, "cookies", c->cookies, 0);
                 ffurl_close(uc);
             } else {
                 av_log(NULL, AV_LOG_ERROR, "Unable to open key file %s\n",
@@ -1055,7 +1044,6 @@ static int open_input(HLSContext *c, struct playlist *pls)
 
 cleanup:
     av_dict_free(&opts);
-    av_dict_free(&opts2);
     pls->cur_seg_offset = 0;
     return ret;
 }
@@ -1312,7 +1300,7 @@ static int save_avio_options(AVFormatContext *s)
     int ret = 0;
 
     while (*opt) {
-        if (av_opt_get(s->pb, *opt, AV_OPT_SEARCH_CHILDREN, &buf) >= 0) {
+        if (av_opt_get(s->pb, *opt, AV_OPT_SEARCH_CHILDREN | AV_OPT_ALLOW_NULL, &buf) >= 0) {
             ret = av_dict_set(&c->avio_opts, *opt, buf,
                               AV_DICT_DONT_STRDUP_VAL);
             if (ret < 0)
@@ -1331,6 +1319,7 @@ static int hls_read_header(AVFormatContext *s)
     int ret = 0, i, j, stream_offset = 0;
 
     c->interrupt_callback = &s->interrupt_callback;
+    c->strict_std_compliance = s->strict_std_compliance;
 
     c->first_packet = 1;
     c->first_timestamp = AV_NOPTS_VALUE;

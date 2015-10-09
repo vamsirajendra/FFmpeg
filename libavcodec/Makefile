@@ -24,6 +24,7 @@ OBJS = allcodecs.o                                                      \
        bitstream.o                                                      \
        bitstream_filter.o                                               \
        codec_desc.o                                                     \
+       d3d11va.o                                                        \
        dv_profile.o                                                     \
        imgconvert.o                                                     \
        mathtables.o                                                     \
@@ -143,7 +144,7 @@ OBJS-$(CONFIG_AC3_ENCODER)             += ac3enc_float.o ac3enc.o ac3tab.o \
                                           ac3.o kbdwin.o
 OBJS-$(CONFIG_AC3_FIXED_ENCODER)       += ac3enc_fixed.o ac3enc.o ac3tab.o ac3.o
 OBJS-$(CONFIG_AIC_DECODER)             += aic.o
-OBJS-$(CONFIG_ALAC_DECODER)            += alac.o alac_data.o
+OBJS-$(CONFIG_ALAC_DECODER)            += alac.o alac_data.o alacdsp.o
 OBJS-$(CONFIG_ALAC_ENCODER)            += alacenc.o alac_data.o
 OBJS-$(CONFIG_ALIAS_PIX_DECODER)       += aliaspixdec.o
 OBJS-$(CONFIG_ALIAS_PIX_ENCODER)       += aliaspixenc.o
@@ -455,6 +456,7 @@ OBJS-$(CONFIG_SAMI_DECODER)            += samidec.o ass.o htmlsubtitles.o
 OBJS-$(CONFIG_S302M_DECODER)           += s302m.o
 OBJS-$(CONFIG_S302M_ENCODER)           += s302menc.o
 OBJS-$(CONFIG_SANM_DECODER)            += sanm.o
+OBJS-$(CONFIG_SCREENPRESSO_DECODER)    += screenpresso.o
 OBJS-$(CONFIG_SGI_DECODER)             += sgidec.o
 OBJS-$(CONFIG_SGI_ENCODER)             += sgienc.o rle.o
 OBJS-$(CONFIG_SGIRLE_DECODER)          += sgirledec.o
@@ -697,7 +699,7 @@ OBJS-$(CONFIG_ADPCM_YAMAHA_DECODER)       += adpcm.o adpcm_data.o
 OBJS-$(CONFIG_ADPCM_YAMAHA_ENCODER)       += adpcmenc.o adpcm_data.o
 
 # hardware accelerators
-OBJS-$(CONFIG_D3D11VA)                    += d3d11va.o dxva2.o
+OBJS-$(CONFIG_D3D11VA)                    += dxva2.o
 OBJS-$(CONFIG_DXVA2)                      += dxva2.o
 OBJS-$(CONFIG_VAAPI)                      += vaapi.o
 OBJS-$(CONFIG_VDA)                        += vda.o videotoolbox.o

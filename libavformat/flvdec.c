@@ -851,7 +851,6 @@ static int flv_read_packet(AVFormatContext *s, AVPacket *pkt)
 
 retry:
     /* pkt size is repeated at end. skip it */
-    for (;; last = avio_rb32(s->pb)) {
         pos  = avio_tell(s->pb);
         type = (avio_r8(s->pb) & 0x1F);
         orig_size =
@@ -954,7 +953,7 @@ skip:
         }
         if (i == s->nb_streams) {
             static const enum AVMediaType stream_types[] = {AVMEDIA_TYPE_VIDEO, AVMEDIA_TYPE_AUDIO, AVMEDIA_TYPE_SUBTITLE};
-            av_log(s, AV_LOG_WARNING, "Stream discovered after head already parsed\n");
+            av_log(s, AV_LOG_WARNING, "%s stream discovered after head already parsed\n", av_get_media_type_string(stream_types[stream_type]));
             st = create_stream(s, stream_types[stream_type]);
             if (!st)
                 return AVERROR(ENOMEM);
@@ -975,8 +974,6 @@ skip:
             ret = AVERROR(EAGAIN);
             goto leave;
         }
-        break;
-    }
 
     // if not streamed and no duration from metadata then seek to end to find
     // the duration from the timestamps
@@ -1138,12 +1135,14 @@ retry_duration:
 
 leave:
     last = avio_rb32(s->pb);
-    if (last != orig_size + 11 && !flv->broken_sizes) {
+    if (last != orig_size + 11 &&
+        (last != orig_size || !last) &&
+        !flv->broken_sizes) {
         av_log(s, AV_LOG_ERROR, "Packet mismatch %d %d\n", last, orig_size + 11);
         avio_seek(s->pb, pos + 1, SEEK_SET);
         ret = resync(s);
+        av_free_packet(pkt);
         if (ret >= 0) {
-            av_free_packet(pkt);
             goto retry;
         }
     }
